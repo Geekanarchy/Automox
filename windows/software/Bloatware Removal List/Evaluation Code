@@ -1,0 +1,78 @@
+# Windows Feature Cleanup - Evaluation Script
+# Checks for presence of unwanted built-in apps and OneDrive
+# Logs actions and outputs results for Automox evaluation
+
+# Define log location
+$logPath = "C:\ProgramData\Automox\Logs"
+$logFile = "$logPath\FeatureCleanup.log"
+
+# Create log directory if it doesn't exist
+if (-not (Test-Path $logPath)) {
+    New-Item -Path $logPath -ItemType Directory -Force | Out-Null
+}
+
+# Start logging
+Start-Transcript -Path $logFile -Append
+
+try {
+    # List of app names to check for
+    $appsToCheck = @(
+        "Microsoft.XboxGamingOverlay",
+        "Microsoft.XboxGameOverlay",
+        "Microsoft.Xbox.TCUI",
+        "Microsoft.XboxSpeechToTextOverlay",
+        "Microsoft.XboxIdentityProvider",
+        "Microsoft.GamingApp",
+        "Microsoft.XboxApp",
+        "Microsoft.People",
+        "Microsoft.SkypeApp",
+        "Microsoft.YourPhone",
+        "Microsoft.CommsPhone",
+        "Microsoft.Messaging",
+        "Microsoft.ZuneMusic",
+        "Microsoft.ZuneVideo",
+        "Microsoft.MicrosoftSolitaireCollection",
+        "Microsoft.BingNews",
+        "Microsoft.BingWeather",
+        "Microsoft.BingSports",
+        "Microsoft.BingFinance",
+        "Microsoft.MixedReality.Portal",
+        "Microsoft.3DViewer",
+        "Microsoft.GetHelp",
+        "Microsoft.Getstarted",
+        "Microsoft.WindowsFeedbackHub",
+        "Microsoft.MicrosoftStickyNotes",
+        "Microsoft.MicrosoftOfficeHub",
+        "Microsoft.Paint3D",
+        "Microsoft.ScreenSketch",
+        "Microsoft.Advertising.Xaml",
+        "Microsoft.Todos"
+    )
+
+    # Get list of installed AppxPackages
+    $installedApps = Get-AppxPackage | Select-Object -ExpandProperty Name
+
+    # Find overlap with unwanted apps
+    $foundApps = $appsToCheck | Where-Object { $_ -in $installedApps }
+
+    # Check for presence of OneDrive setup executable
+    $oneDrivePath = "$env:SYSTEMROOT\System32\OneDriveSetup.exe"
+    $oneDriveInstalled = Test-Path $oneDrivePath
+
+    # If any unwanted apps or OneDrive found, trigger remediation
+    if ($foundApps.Count -gt 0 -or $oneDriveInstalled) {
+        Write-Output "Unwanted apps or OneDrive detected: $($foundApps -join ', ')"
+        Stop-Transcript
+        exit 1
+    } else {
+        Write-Output "No unwanted apps found. System clean."
+        Stop-Transcript
+        exit 0
+    }
+}
+catch {
+    # Catch and log any evaluation errors
+    Write-Error "Evaluation failed: $_"
+    Stop-Transcript
+    exit 1
+}

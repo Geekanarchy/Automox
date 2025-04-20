@@ -1,0 +1,103 @@
+# Windows Feature Cleanup - Remediation Script
+# Removes built-in apps and OneDrive, including provisioned packages and user profile leftovers
+# Logs all actions and errors for auditing purposes
+
+# Define log location
+$logPath = "C:\ProgramData\Automox\Logs"
+$logFile = "$logPath\FeatureCleanup.log"
+
+# Create log directory if not present
+if (-not (Test-Path $logPath)) {
+    New-Item -Path $logPath -ItemType Directory -Force | Out-Null
+}
+
+# Start logging session
+Start-Transcript -Path $logFile -Append
+
+try {
+    # List of unwanted AppxPackage names to remove
+    $appsToRemove = @(
+        "Microsoft.XboxGamingOverlay",
+        "Microsoft.XboxGameOverlay",
+        "Microsoft.Xbox.TCUI",
+        "Microsoft.XboxSpeechToTextOverlay",
+        "Microsoft.XboxIdentityProvider",
+        "Microsoft.GamingApp",
+        "Microsoft.XboxApp",
+        "Microsoft.People",
+        "Microsoft.SkypeApp",
+        "Microsoft.YourPhone",
+        "Microsoft.CommsPhone",
+        "Microsoft.Messaging",
+        "Microsoft.ZuneMusic",
+        "Microsoft.ZuneVideo",
+        "Microsoft.MicrosoftSolitaireCollection",
+        "Microsoft.BingNews",
+        "Microsoft.BingWeather",
+        "Microsoft.BingSports",
+        "Microsoft.BingFinance",
+        "Microsoft.MixedReality.Portal",
+        "Microsoft.3DViewer",
+        "Microsoft.GetHelp",
+        "Microsoft.Getstarted",
+        "Microsoft.WindowsFeedbackHub",
+        "Microsoft.MicrosoftStickyNotes",
+        "Microsoft.MicrosoftOfficeHub",
+        "Microsoft.Paint3D",
+        "Microsoft.ScreenSketch",
+        "Microsoft.Advertising.Xaml",
+        "Microsoft.Todos"
+    )
+
+    # Loop through each app and remove it for all users and from provisioning
+    foreach ($app in $appsToRemove) {
+        try {
+            Write-Output "Attempting to remove app: $app"
+            Get-AppxPackage -Name $app -AllUsers | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue
+            Get-AppxProvisionedPackage -Online | Where-Object DisplayName -EQ $app | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
+        } catch {
+            Write-Warning "Error removing $app: $_"
+        }
+    }
+
+    # Remove OneDrive (system-wide uninstall)
+    $oneDriveSetup = "$env:SYSTEMROOT\System32\OneDriveSetup.exe"
+    if (Test-Path $oneDriveSetup) {
+        try {
+            Write-Output "Uninstalling OneDrive..."
+            Start-Process $oneDriveSetup -ArgumentList "/uninstall" -NoNewWindow -Wait
+        } catch {
+            Write-Warning "Failed to uninstall OneDrive: $_"
+        }
+    }
+
+    # Remove OneDrive folders from user profiles
+    Get-ChildItem "C:\Users" -Directory | ForEach-Object {
+        $userProfile = $_.FullName
+        $oneDriveFolders = @(
+            "$userProfile\OneDrive",
+            "$userProfile\AppData\Local\Microsoft\OneDrive"
+        )
+        foreach ($folder in $oneDriveFolders) {
+            if (Test-Path $folder) {
+                try {
+                    Write-Output "Removing OneDrive folder: $folder"
+                    Remove-Item -Recurse -Force -Path $folder -ErrorAction SilentlyContinue
+                } catch {
+                    Write-Warning "Failed to remove OneDrive folder $folder: $_"
+                }
+            }
+        }
+    }
+
+    # Final success message
+    Write-Output "Feature cleanup and OneDrive removal completed."
+    Stop-Transcript
+    exit 0
+}
+catch {
+    # Catch any unexpected failure
+    Write-Error "Remediation failed: $_"
+    Stop-Transcript
+    exit 1
+}
